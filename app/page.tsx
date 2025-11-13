@@ -299,7 +299,7 @@ export default function Home() {
                             value: "accounts/sentientfoundation/models/dobby-unhinged-llama-3-3-70b-new",
                           },
                           {
-                            label: "Llama 3.1 8B",
+                            label: "Llama 3.1 405B",
                             value: "accounts/fireworks/models/llama-v3p1-405b-instruct",
                           },
                         ].map((model) => (
