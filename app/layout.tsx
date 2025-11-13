@@ -6,9 +6,9 @@ import PlausibleProvider from "next-plausible";
 
 let title = "Dobby Coder – AI Code Generator";
 let description = "Generate your next app with Fireworks AI";
-let url = "https://dobbycoder.io/";
+let url = "https://dobby-coder.vercel.app/";
 let ogimage = "https://dobbycoder.io/og-image.png";
-let sitename = "dobbycoder.io";
+let sitename = "dobby-coder.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(url),
