@@ -7,23 +7,24 @@ export interface ChatGPTMessage {
   content: string;
 }
 
-export interface TogetherAIStreamPayload {
+export interface FireworksAIStreamPayload {
   model: string;
   messages: ChatGPTMessage[];
   temperature: number;
   stream: boolean;
+  max_tokens?: number;
 }
 
-export async function TogetherAIStream(payload: TogetherAIStreamPayload) {
+export async function FireworksAIStream(payload: FireworksAIStreamPayload) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
-  const url = process.env.LLAMAEDGE_BASE_URL || "https://llama.us.gaianet.network/v1"
+  const url = process.env.FIREWORKS_BASE_URL || "https://api.fireworks.ai/inference/v1";
 
   let res = await fetch(url + "/chat/completions", {
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.LLAMAEDGE_API_KEY ?? ""}`
+      Authorization: `Bearer ${process.env.FIREWORKS_API_KEY ?? ""}`
     },
     method: "POST",
     body: JSON.stringify(payload)
@@ -47,13 +48,13 @@ export async function TogetherAIStream(payload: TogetherAIStreamPayload) {
           body: await res.text()
         };
         console.log(
-          `Error: recieved non-200 status code, ${JSON.stringify(data)}`
+          `Error: received non-200 status code, ${JSON.stringify(data)}`
         );
         controller.close();
         return;
       }
 
-      // stream response (SSE) from OpenAI may be fragmented into multiple chunks
+      // stream response (SSE) from Fireworks AI may be fragmented into multiple chunks
       // this ensures we properly read chunks and invoke an event for each SSE event stream
       const parser = createParser(onParse);
       // https://web.dev/streams/#asynchronous-iteration
@@ -79,7 +80,7 @@ export async function TogetherAIStream(payload: TogetherAIStreamPayload) {
           // this is a prefix character (i.e., "\n\n"), do nothing
           return;
         }
-        // stream transformed JSON resposne as SSE
+        // stream transformed JSON response as SSE
         const payload = { text: text };
         // https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events#event_stream_format
         controller.enqueue(

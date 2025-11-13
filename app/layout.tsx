@@ -4,11 +4,11 @@ import Image from "next/image";
 import bgImg from "@/public/halo.png";
 import PlausibleProvider from "next-plausible";
 
-let title = "Llama Coder – AI Code Generator";
-let description = "Generate your next app with Llama 3.1 405B";
-let url = "https://llamacoder.io/";
-let ogimage = "https://llamacoder.io/og-image.png";
-let sitename = "llamacoder.io";
+let title = "Dobby Coder – AI Code Generator";
+let description = "Generate your next app with Fireworks AI";
+let url = "https://dobbycoder.io/";
+let ogimage = "https://dobbycoder.io/og-image.png";
+let sitename = "dobbycoder.io";
 
 export const metadata: Metadata = {
   metadataBase: new URL(url),
@@ -42,7 +42,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <PlausibleProvider domain="llamacoder.io" />
+        <PlausibleProvider domain="dobbycoder.io" />
       </head>
       <body className="bg-brand antialiased">
         <div className="absolute inset-x-0 flex justify-center">

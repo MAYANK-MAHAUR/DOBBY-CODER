@@ -1,10 +1,10 @@
 "use client";
-
 import Footer from "@/components/Footer";
 import Header from "@/components/Header";
 import { useScrollTo } from "@/hooks/use-scroll-to";
 import { Sandpack } from "@codesandbox/sandpack-react";
 import { dracula as draculaTheme } from "@codesandbox/sandpack-themes";
+import { useMemo, useRef } from "react";
 import { CheckIcon } from "@heroicons/react/16/solid";
 import {
   ArrowLongRightIcon,
@@ -34,26 +34,42 @@ export default function Home() {
     [],
   );
 
+  // Use ref to accumulate code during streaming without triggering re-renders
+  const codeAccumulationRef = useRef("");
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   let loading = status === "creating" || status === "updating";
 
+  // Debounced setGeneratedCode to reduce re-renders
+  const debouncedSetCode = (code: string) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      setGeneratedCode(code);
+    }, 50); // Adjust delay as needed
+  };
+
   async function generateCode(e: FormEvent<HTMLFormElement>) {
-
     e.preventDefault();
-
     if (status !== "initial") {
       scrollTo({ delay: 0.5 });
     }
-
     setStatus("creating");
     setGeneratedCode("");
+    codeAccumulationRef.current = ""; // Reset
 
     let formData = new FormData(e.currentTarget);
     let model = formData.get("model");
     let framework = formData.get("framework");
     let prompt = formData.get("prompt");
-    if (typeof prompt !== "string" || typeof model !== "string" || typeof framework !== "string") {
+
+    if (
+      typeof prompt !== "string" ||
+      typeof model !== "string" ||
+      typeof framework !== "string"
+    ) {
       return;
     }
+
     setFrameworkUsedForInitialCode(framework);
     let newMessages = [{ role: "user", content: prompt }];
 
@@ -65,31 +81,32 @@ export default function Home() {
       body: JSON.stringify({
         messages: newMessages,
         model,
-        framework
+        framework,
       }),
     });
+
     if (!chatRes.ok) {
       throw new Error(chatRes.statusText);
     }
 
-    // This data is a ReadableStream
     const data = chatRes.body;
     if (!data) {
       return;
     }
+
     const onParse = (event: ParsedEvent | ReconnectInterval) => {
       if (event.type === "event") {
         const data = event.data;
         try {
           const text = JSON.parse(data).text ?? "";
-          setGeneratedCode((prev) => prev + text);
+          codeAccumulationRef.current += text;
+          debouncedSetCode(codeAccumulationRef.current);
         } catch (e) {
           console.error(e);
         }
       }
     };
 
-    // https://web.dev/streams/#the-getreader-and-read-methods
     const reader = data.getReader();
     const decoder = new TextDecoder();
     const parser = createParser(onParse);
@@ -102,29 +119,35 @@ export default function Home() {
       parser.feed(chunkValue);
     }
 
+    // Final update after stream ends
+    setGeneratedCode(codeAccumulationRef.current);
+
     newMessages = [
       ...newMessages,
-      { role: "assistant", content: generatedCode },
+      { role: "assistant", content: codeAccumulationRef.current },
     ];
-
     setModelUsedForInitialCode(model);
     setMessages(newMessages);
     setStatus("created");
+
+    // Only scroll after creation is fully done
+    setTimeout(() => scrollTo(), 100);
   }
 
   async function modifyCode(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-
     setStatus("updating");
+    codeAccumulationRef.current = ""; // Reset
+    setGeneratedCode("");
 
     let formData = new FormData(e.currentTarget);
     let prompt = formData.get("prompt");
     if (typeof prompt !== "string") {
       return;
     }
+
     let newMessages = [...messages, { role: "user", content: prompt }];
 
-    setGeneratedCode("");
     const chatRes = await fetch("/api/generateCode", {
       method: "POST",
       headers: {
@@ -133,31 +156,32 @@ export default function Home() {
       body: JSON.stringify({
         messages: newMessages,
         model: modelUsedForInitialCode,
-        framework: frameworkUsedForInitialCode
+        framework: frameworkUsedForInitialCode,
       }),
     });
+
     if (!chatRes.ok) {
       throw new Error(chatRes.statusText);
     }
 
-    // This data is a ReadableStream
     const data = chatRes.body;
     if (!data) {
       return;
     }
+
     const onParse = (event: ParsedEvent | ReconnectInterval) => {
       if (event.type === "event") {
         const data = event.data;
         try {
           const text = JSON.parse(data).text ?? "";
-          setGeneratedCode((prev) => prev + text);
+          codeAccumulationRef.current += text;
+          debouncedSetCode(codeAccumulationRef.current);
         } catch (e) {
           console.error(e);
         }
       }
     };
 
-    // https://web.dev/streams/#the-getreader-and-read-methods
     const reader = data.getReader();
     const decoder = new TextDecoder();
     const parser = createParser(onParse);
@@ -170,49 +194,36 @@ export default function Home() {
       parser.feed(chunkValue);
     }
 
+    // Final update
+    setGeneratedCode(codeAccumulationRef.current);
+
     newMessages = [
       ...newMessages,
-      { role: "assistant", content: generatedCode },
+      { role: "assistant", content: codeAccumulationRef.current },
     ];
-
     setMessages(newMessages);
     setStatus("updated");
+
+    // Scroll after update
+    setTimeout(() => scrollTo(), 100);
   }
 
-  useEffect(() => {
-    let el = document.querySelector(".cm-scroller");
-    if (el && loading) {
-      let end = el.scrollHeight - el.clientHeight;
-      el.scrollTo({ top: end });
+  const files = useMemo(() => {
+    switch (frameworkUsedForInitialCode) {
+      case "react":
+        return { "App.tsx": generatedCode };
+      case "vue":
+        return { "src/App.vue": generatedCode };
+      case "angular":
+        return { "src/app/app.component.ts": generatedCode };
+      case "svelte":
+        return { "/App.svelte": generatedCode };
+      case "nextjs":
+        return { "pages/index.js": generatedCode };
+      default:
+        return { "index.html": generatedCode };
     }
-  }, [loading, generatedCode]);
-
-  let files = {}
-  if(frameworkUsedForInitialCode==="react") {
-    files = {
-      "App.tsx": generatedCode
-    }
-  }else if(frameworkUsedForInitialCode==="vue") {
-    files = {
-      "src/App.vue": generatedCode
-    }
-  }else if(frameworkUsedForInitialCode==="angular"){
-    files = {
-      "src/app/app.component.ts": generatedCode
-    }
-  }else if(frameworkUsedForInitialCode==="svelte"){
-    files = {
-      "/App.svelte": generatedCode
-    }
-  }else if(frameworkUsedForInitialCode==="nextjs"){
-    files = {
-      "pages/index.js": generatedCode
-    }
-  }else{
-    files = {
-      "index.html": generatedCode
-    }
-  }
+  }, [frameworkUsedForInitialCode, generatedCode]);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-7xl flex-col items-center justify-center py-2">
@@ -221,14 +232,14 @@ export default function Home() {
       <main className="mt-12 flex w-full flex-1 flex-col items-center px-4 text-center sm:mt-20">
         <a
           className="mb-4 inline-flex h-7 shrink-0 items-center gap-[9px] rounded-[50px] border-[0.5px] border-solid border-[#E6E6E6] bg-[rgba(234,238,255,0.65)] bg-gray-100 px-7 py-5 shadow-[0px_1px_1px_0px_rgba(0,0,0,0.25)]"
-          href="https://www.gaianet.ai/"
+          href="https://fireworks.ai/"
           target="_blank"
         >
           <span className="text-center">
-            Powered by <span className="font-medium">Llama 3.1</span> and{" "}
-            <span className="font-medium">GaiaNet</span>
+            Powered by <span className="font-medium">Fireworks AI</span>
           </span>
         </a>
+
         <h1 className="my-6 max-w-3xl text-4xl font-bold text-gray-800 sm:text-6xl">
           Turn your <span className="text-blue-600">idea</span>
           <br /> into an <span className="text-blue-600">app</span>
@@ -260,26 +271,23 @@ export default function Home() {
                 </button>
               </div>
             </div>
+
             <div className="flex justify-between">
-              {/*<input*/}
-              {/*  required*/}
-              {/*  name="baseURL"*/}
-              {/*  placeholder="enter your base url"*/}
-              {/*  defaultValue="https://llama.us.gaianet.network/v1"*/}
-              {/*/>*/}
               <div className="mt-6 flex items-center justify-center gap-3">
                 <p className="text-xs text-gray-500">Model:</p>
                 <Select.Root
                   name="model"
-                  defaultValue={process.env.NEXT_PUBLIC_LLAMAEDGE_MODEL_NAME || "llama"}
+                  defaultValue="accounts/sentientfoundation/models/dobby-unhinged-llama-3-3-70b-new"
                   disabled={loading}
                 >
                   <Select.Trigger
-                    className="group flex w-full max-w-xs items-center rounded-2xl border-[6px] border-gray-300 bg-white px-4 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
+                    className="group flex w-full max-w-xs items-center rounded-2xl border-[6px] border-gray-300 bg-white px-4 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+                  >
                     <Select.Value />
                     <Select.Icon className="ml-auto">
                       <ChevronDownIcon
-                        className="size-6 text-gray-300 group-focus-visible:text-gray-500 group-enabled:group-hover:text-gray-500" />
+                        className="size-6 text-gray-300 group-focus-visible:text-gray-500 group-enabled:group-hover:text-gray-500"
+                      />
                     </Select.Icon>
                   </Select.Trigger>
                   <Select.Portal>
@@ -287,9 +295,13 @@ export default function Home() {
                       <Select.Viewport className="p-2">
                         {[
                           {
-                            label: process.env.NEXT_PUBLIC_LLAMAEDGE_MODEL_NAME || "llama",
-                            value: process.env.NEXT_PUBLIC_LLAMAEDGE_MODEL_NAME || "llama"
-                          }
+                            label: "Dobby Unhinged",
+                            value: "accounts/sentientfoundation/models/dobby-unhinged-llama-3-3-70b-new",
+                          },
+                          {
+                            label: "Llama 3.1 8B",
+                            value: "accounts/fireworks/models/llama-v3p1-405b-instruct",
+                          },
                         ].map((model) => (
                           <Select.Item
                             key={model.value}
@@ -297,10 +309,10 @@ export default function Home() {
                             className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm data-[highlighted]:bg-gray-100 data-[highlighted]:outline-none"
                           >
                             <Select.ItemText asChild>
-                            <span className="inline-flex items-center gap-2 text-gray-500">
-                              <div className="size-2 rounded-full bg-green-500" />
-                              {model.label}
-                            </span>
+                              <span className="inline-flex items-center gap-2 text-gray-500">
+                                <div className="size-2 rounded-full bg-green-500" />
+                                {model.label}
+                              </span>
                             </Select.ItemText>
                             <Select.ItemIndicator className="ml-auto">
                               <CheckIcon className="size-5 text-blue-600" />
@@ -314,6 +326,7 @@ export default function Home() {
                   </Select.Portal>
                 </Select.Root>
               </div>
+
               <div className="mt-6 flex items-center justify-center gap-3">
                 <p className="text-xs text-gray-500">Framework:</p>
                 <Select.Root
@@ -322,27 +335,22 @@ export default function Home() {
                   disabled={loading}
                 >
                   <Select.Trigger
-                    className="group flex w-full max-w-xs items-center rounded-2xl border-[6px] border-gray-300 bg-white px-4 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
+                    className="group flex w-full max-w-xs items-center rounded-2xl border-[6px] border-gray-300 bg-white px-4 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
+                  >
                     <Select.Value />
                     <Select.Icon className="ml-auto">
                       <ChevronDownIcon
-                        className="size-6 text-gray-300 group-focus-visible:text-gray-500 group-enabled:group-hover:text-gray-500" />
+                        className="size-6 text-gray-300 group-focus-visible:text-gray-500 group-enabled:group-hover:text-gray-500"
+                      />
                     </Select.Icon>
                   </Select.Trigger>
                   <Select.Portal>
                     <Select.Content className="overflow-hidden rounded-md bg-white shadow-lg">
                       <Select.Viewport className="p-2">
                         {[
-                          {
-                            label: "React",
-                            value: "react"
-                          }, {
-                            label: "Vue",
-                            value: "vue"
-                          }, {
-                            label: "None",
-                            value: "static"
-                          }
+                          { label: "React", value: "react" },
+                          { label: "Vue", value: "vue" },
+                          { label: "None", value: "static" },
                         ].map((framework) => (
                           <Select.Item
                             key={framework.value}
@@ -350,9 +358,9 @@ export default function Home() {
                             className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm data-[highlighted]:bg-gray-100 data-[highlighted]:outline-none"
                           >
                             <Select.ItemText asChild>
-                            <span className="inline-flex items-center gap-2 text-gray-500">
-                              {framework.label}
-                            </span>
+                              <span className="inline-flex items-center gap-2 text-gray-500">
+                                {framework.label}
+                              </span>
                             </Select.ItemText>
                             <Select.ItemIndicator className="ml-auto">
                               <CheckIcon className="size-5 text-blue-600" />
@@ -378,11 +386,11 @@ export default function Home() {
             animate={{
               height: "auto",
               overflow: "hidden",
-              transitionEnd: { overflow: "visible" }
+              transitionEnd: { overflow: "visible" },
             }}
             transition={{ type: "spring", bounce: 0, duration: 0.5 }}
             className="w-full pb-[25vh] pt-10"
-            onAnimationComplete={() => scrollTo()}
+            // Removed onAnimationComplete to prevent side effects during render
             ref={ref}
           >
             <div className="mt-5 flex gap-4">
@@ -413,6 +421,7 @@ export default function Home() {
                   </div>
                 </fieldset>
               </form>
+
               <div>
                 <Tooltip.Provider>
                   <Tooltip.Root delayDuration={0}>
@@ -420,10 +429,6 @@ export default function Home() {
                       <button
                         onClick={() => {
                           location.reload();
-
-                          // TODO: Cancel stream and reset this state
-                          // setMessages([]);
-                          // setStatus("initial");
                         }}
                         className="inline-flex size-[68px] items-center justify-center rounded-3xl bg-blue-500"
                       >
@@ -443,19 +448,31 @@ export default function Home() {
                 </Tooltip.Provider>
               </div>
             </div>
+
             <div className="relative mt-8 w-full overflow-hidden">
               <div className="isolate">
                 <Sandpack
+                  key={frameworkUsedForInitialCode + generatedCode.substring(0, 50)} // Prevent remount loop
                   theme={draculaTheme}
                   options={{
                     externalResources: [
-                      "https://unpkg.com/@tailwindcss/ui/dist/tailwind-ui.min.css"
+                      "https://unpkg.com/@tailwindcss/ui/dist/tailwind-ui.min.css",
                     ],
                     editorHeight: "80vh",
-                    showTabs: false
+                    showTabs: false,
                   }}
                   files={files}
-                  template={frameworkUsedForInitialCode + (frameworkUsedForInitialCode !== "react" ? "" : "-ts") as "vanilla"}
+                  template={
+                    frameworkUsedForInitialCode === "react"
+                      ? "react-ts"
+                      : frameworkUsedForInitialCode === "nextjs"
+                      ? "nextjs"
+                      : frameworkUsedForInitialCode === "vue"
+                      ? "vue"
+                      : frameworkUsedForInitialCode === "svelte"
+                      ? "svelte"
+                      : "vanilla"
+                  }
                 />
               </div>
 
@@ -485,6 +502,7 @@ export default function Home() {
           </motion.div>
         )}
       </main>
+
       <Footer />
     </div>
   );

@@ -7,24 +7,17 @@ export default function Footer() {
         <div className="font-medium">
           Built with{" "}
           <a
-            href="https://huggingface.co/gaianet/Meta-Llama-3.1-8B-Instruct-GGUF"
+            href="https://fireworks.ai/"
             className="font-semibold text-blue-600 underline-offset-4 transition hover:text-gray-700 hover:underline"
           >
-            Llama-3.1-8B
-          </a>{" "}
-          and{" "}
-          <a
-            href="https://www.gaianet.ai/"
-            className="font-semibold text-blue-600 underline-offset-4 transition hover:text-gray-700 hover:underline"
-          >
-            GaiaNet
+            Fireworks AI
           </a>
           .
         </div>
       </div>
       <div className="flex space-x-4 pb-4 sm:pb-0">
         <Link
-          href="https://x.com/gaianet_ai"
+          href="https://x.com/SentientAGI"
           className="group"
           aria-label=""
         >
@@ -36,9 +29,9 @@ export default function Footer() {
           </svg>
         </Link>
         <Link
-          href="https://github.com/second-state/llamacoder"
+          href="https://github.com/MAYANK-MAHAUR/DOBBY-CODER"
           className="group"
-          aria-label="TaxPal on GitHub"
+          aria-label="DobbyCoder on GitHub"
         >
           <svg
             aria-hidden="true"
