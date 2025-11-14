@@ -10,6 +10,11 @@ Turn your ideas into apps with AI-powered code generation using the Dobby Unhing
 - ⚡ Real-time code generation and preview
 - 🔄 Iterative refinement - modify your app with follow-up prompts
 
+
+https://github.com/user-attachments/assets/ab541a83-af32-4a4d-901b-da9328ba35c4
+
+
+
 ## 🚀 Getting Started
 
 ### Prerequisites
